@@ -43,6 +43,11 @@ sudo ldconfig
 >
 > and `source` it
 
+```diff
+-Remember to run `roscore` before you start the world.
+```
+
+
 And then run your webots, select the worlds at `./worlds/uav.wbt` and you can see the drone takeoff.
 
 ![Screenshot from 2020-12-16 09-21-15](./README.assets/LICENSE)
