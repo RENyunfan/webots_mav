@@ -52,6 +52,8 @@ Use command below to visualize the point cloud.
 roslaunch flight_controller rviz.launch
 ```
 
+
+
 ![Screenshot from 2020-12-16 09-23-26](./README.assets/Screenshot from 2020-12-16 09-23-26.png)
 
 
