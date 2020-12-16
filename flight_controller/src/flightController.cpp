@@ -98,8 +98,8 @@ uavModule::uavModule(int time_, Eigen::MatrixXd paraMat) {
     layers = wb_lidar_get_number_of_layers(sick);
 }
 
+//TODO: I have limit the point cloud range to [0,4] meter. To make sure the color map in rviz looks good
 void uavModule::runSickOnce() {
-
     sensor_msgs::PointCloud2 pc;
     pcl::PointCloud<pcl::PointXYZ> cloud;
     sensor_msgs::PointCloud2 output;

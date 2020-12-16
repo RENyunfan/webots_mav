@@ -1,0 +1,5 @@
+<launch>
+    <!-- run rviz -->
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find flight_controller)/config/default.rviz"/>
+</launch>
+
