@@ -40,7 +40,7 @@ webots
 
 Then select the worlds at `./worlds/uav.wbt` and you can see the drone takeoff.
 
-![Screenshot from 2020-12-16 09-21-15](/home/yunfan/Documents/Github/README.assets/LICENSE)
+![Screenshot from 2020-12-16 09-21-15](./README.assets/LICENSE)
 
 You can use topic `/mavros/setpoint_velocity/cmd_vel` to control the velocity of the uav.
 
@@ -52,7 +52,7 @@ Use command below to visualize the point cloud.
 roslaunch flight_controller rviz.launch
 ```
 
-![Screenshot from 2020-12-16 09-23-26](/home/yunfan/Documents/Github/README.assets/Screenshot from 2020-12-16 09-23-26.png)
+![Screenshot from 2020-12-16 09-23-26](./README.assets/Screenshot from 2020-12-16 09-23-26.png)
 
 
 
