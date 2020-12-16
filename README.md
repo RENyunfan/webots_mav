@@ -12,6 +12,22 @@ This is a ROS package that follows the GPL3 open source protocol, which implemen
 
 # Build & Usage
 
+## Dependencies
+
+```bash
+sudo apt-get install ros-melodic-mavros*
+```
+
+> If you are using zsh, you may face the `*` operator cannot work. 
+>
+> Don't worry, just add a line in` ~/.zshrc`
+>
+> ```cpp
+> setopt no_nomatch
+> ```
+>
+> and `source` it.
+
 ## Build
 
 Clone this package to your `catkin_ws` and `catkin_make` it.
@@ -32,16 +48,6 @@ Open a terminal, type
 sudo ln -s /opt/ros/melodic/lib/* /usr/local/lib    
 sudo ldconfig
 ```
-
-> If you are using zsh, you may face the `*` operator cannot work. 
->
-> Dont worry, just add a line in` ~/.zshrc`
->
-> ```cpp
-> setopt no_nomatch
-> ```
->
-> and `source` it
 
 ```diff
 -Remember to run `roscore` before you start the world.
