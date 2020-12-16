@@ -29,16 +29,21 @@ catkin_make
 Open a terminal, type
 
 ```bash
-LD_PATH_LIB=/opt/ros/melodic/lib
+sudo ln -s /opt/ros/melodic/lib/* /usr/local/lib    
+sudo ldconfig
 ```
 
- and open your webots in this terminal
+> If you are using zsh, you may face the `*` operator cannot work. 
+>
+> Dont worry, just add a line in` ~/.zshrc`
+>
+> ```cpp
+> setopt no_nomatch
+> ```
+>
+> and `source` it
 
-```bash
-webots
-```
-
-Then select the worlds at `./worlds/uav.wbt` and you can see the drone takeoff.
+And then run your webots, select the worlds at `./worlds/uav.wbt` and you can see the drone takeoff.
 
 ![Screenshot from 2020-12-16 09-21-15](./README.assets/LICENSE)
 
