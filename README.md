@@ -11,6 +11,7 @@ This is a ROS package that follows the GPL3 open source protocol, which implemen
 ```diff
 + 2020-12-26: First commit.
 + 2021-02-19: Add velocity control.
++ 2021-02-19: Add a package joy2twist so you can control the mav with joysticks
 ```
 
 <img src="README.assets/image-20210219010914847.png" alt="image-20210219010914847" style="zoom:35%;" />
