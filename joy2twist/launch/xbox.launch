@@ -1,0 +1,12 @@
+<launch>
+	<arg name="use_stamped" value="true"> </arg>
+	<node pkg="joy" name="joy_node" type="joy_node" output="screen" />
+
+<!--	if you want to use mavros for UAV simulation, you need to publish TwistStamped, remember to-->
+<!--	set the param to TRUE-->
+	<node pkg="joy2twist" name="xbox" type="xbox" output="screen" >
+	    <param name="/use_stamped"   value="$(arg use_stamped)"/>
+		<remap from="cmd_vel" to="/mavros/setpoint_velocity/cmd_vel" />
+	</node>
+
+</launch>
