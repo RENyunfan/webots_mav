@@ -1,0 +1,7 @@
+#VRML_OBJ R2021a utf8
+Floor {
+  size 400 400
+  tileSize 6 6
+  appearance SandyGround {
+  }
+}

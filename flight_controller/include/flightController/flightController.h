@@ -7,6 +7,9 @@
 
 #include "flightController/common_inc.h"
 #include "flightController/calculate.h"
+#include "flightController/SO3Control.h"
+#include "quadrotor_msgs/PositionCommand.h"
+#include "nav_msgs/Odometry.h"
 class uavModule{
 
 private:
@@ -41,12 +44,17 @@ private:
     ros::Publisher desiredPose_pub;
     ros::Publisher thrust_pub;
     ros::Publisher pointCloud_pub;
+    ros::Publisher odom_pub;
     ros::Subscriber velocity_sub;
+    ros::Subscriber traj_sub;
     ros::NodeHandle nh_;
 
     Vec3 accErrPositon;
     /// Controller Data Structure
-    cal_c cal;
+
+    SO3Control controller_;
+
+    cal_c cal,cal2;
     struct desiered_t {
         Vec3 cPosition;
         Mat33 cRotiation;
@@ -68,6 +76,8 @@ private:
         Mat33 rotation;
         Vec3 bodyRate;
         double thrust;
+        double yaw;
+        double yawD;
     }desiered;
 
     struct feedback_t {
@@ -90,7 +100,7 @@ private:
         Vec3 cEulerAngleD;
         Vec3 pEulerAngleD;
         Vec3 ppEulerAngleD;
-    }feedback;
+    }feedback, lidar_feedback;
 
     struct calculate_t {
         Vec3 cPosition;
@@ -132,19 +142,22 @@ private:
     void cmd_velocity_callback(const geometry_msgs::TwistStamped::ConstPtr &msg);
     void cmd_attitude_callback(const mavros_msgs::AttitudeTargetConstPtr &msg);
     void cmd_position_callback(const geometry_msgs::PoseStamped::ConstPtr &msg);
+    void cmd_traj_callback(const quadrotor_msgs::PositionCommandConstPtr & msg);
     Vec3 lockPosition;
     int isLock;
 
 public:
-    uavModule(int time_step, Eigen::MatrixXd paraMat);
+    uavModule(ros::NodeHandle & nh,int time_step, Eigen::MatrixXd paraMat);
     void runSickOnce();
     void runUavControllerOnce();
     void getPose();
     geometry_msgs::Pose getPoseOnce();
     void pubPose();
-    void stabilized();
     void updateState(double dt);
     void setDesiredPosition(Vec3 position);
+
+    void positionControl();
+    void stabilized();
     void velocityControl();
 };
 

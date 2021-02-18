@@ -12,7 +12,7 @@ int main(int argc, char **argv) {
     cout<<"Start drone init process."<<endl;
     wb_robot_init();
     ros::init(argc,argv,"uav_lidar");
-
+    ros::NodeHandle nh;
     // 读取PID参数
     cv::FileStorage fs(config_file, cv::FileStorage::READ);
     cv::Mat paraMatCV, targetMatCV;
@@ -23,19 +23,23 @@ int main(int argc, char **argv) {
     cv::cv2eigen(paraMatCV,paraMat);
     cv::cv2eigen(targetMatCV,targetMat);
     std::cout<<paraMat<<std::endl;
-    std::cout<<paraMat<<std::endl;
-
+    ros::Rate loopRate(100);
 
     const int time_step = 10;
-    uavModule UAV(time_step, paraMat);
-
+    uavModule UAV(nh,time_step, paraMat);
+    int cnt = 100;
     while (wb_robot_step(time_step) != -1) {
-
+    if(cnt -- < 0 ){
+        ROS_INFO("Position control working!");
+        cnt = 100;
+    }
 //        UAV.setDesiredPosition(targetMat.row(0));
-        UAV.velocityControl();
+//        UAV.velocityControl();
 //        UAV.stabilized();
+        UAV.positionControl();
         ros::spinOnce();
-        }
+//        loopRate.sleep();
+    }
 
     wb_robot_cleanup();
 

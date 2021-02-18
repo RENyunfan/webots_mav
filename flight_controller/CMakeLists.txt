@@ -15,7 +15,9 @@ find_package(catkin REQUIRED COMPONENTS
         visualization_msgs
         geometry_msgs
         pcl_ros
+        quadrotor_msgs
         tf2
+        webots_ros
         )
 
 find_package(Eigen3 REQUIRED)
@@ -60,15 +62,15 @@ set(THIRD_PARTY_LIBS
         ${PCL_LIBRARIES}
         )
 
-add_executable(se3controller App/main.cpp src/flightController.cpp
+add_executable(se3controller
+        App/main.cpp
+        src/flightController.cpp
+        src/SO3Control.cpp
         )
 target_link_libraries(se3controller
         ${THIRD_PARTY_LIBS}
         ${catkin_LIBRARIES}
         /usr/lib/x86_64-linux-gnu/libm.so
         )
-
-
-
 
 

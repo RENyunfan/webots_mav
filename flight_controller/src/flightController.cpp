@@ -5,14 +5,25 @@
 #include "flightController/flightController.h"
 
 void uavModule::cmd_velocity_callback(const geometry_msgs::TwistStamped::ConstPtr &msg){
-    desiered.cPositionD.x() = msg->twist.linear.x;
-    desiered.cPositionD.y() = msg->twist.linear.y;
+
+    desiered.yawD = msg->twist.angular.z;
+
+    desiered.cPositionD.x() = 3*(msg->twist.linear.x * cos(feedback.cEulerAngle.z())  + msg->twist.linear.y*sin(feedback.cEulerAngle.z()));
+    desiered.cPositionD.y() = 3*(msg->twist.linear.x * sin(feedback.cEulerAngle.z()) - msg->twist.linear.y*cos(feedback.cEulerAngle.z()));
     desiered.cPositionD.z() = msg->twist.linear.z;
-
     desiered.cEulerAngleD.z() = msg->twist.angular.z;
-
+    desiered.cPosition.z()=-1;
 
 }
+
+void uavModule::cmd_traj_callback(const quadrotor_msgs::PositionCommandConstPtr &msg) {
+    desiered.cPosition = Vec3(msg->position.x, -msg->position.y, msg->position.z);
+    desiered.cPositionD = Vec3(msg->velocity.x, -msg->velocity.y, msg->velocity.z);
+    desiered.cPositionDD = Vec3(msg->acceleration.x, -msg->acceleration.y, msg->acceleration.z);
+    desiered.yaw = -msg->yaw;
+    desiered.yawD =-msg->yaw_dot;
+}
+
 
 void uavModule::cmd_attitude_callback(const mavros_msgs::AttitudeTargetConstPtr &msg) {
      desiered.thrust = msg->thrust;
@@ -21,19 +32,26 @@ void uavModule::cmd_attitude_callback(const mavros_msgs::AttitudeTargetConstPtr 
 }
 
 void uavModule::cmd_position_callback(const geometry_msgs::PoseStamped::ConstPtr &msg) {
-    desiered.cPosition = uav_utils::point_tf2eig(msg->pose.position);
+    desiered.cPosition = Vec3(msg->pose.position.x,-msg->pose.position.y, msg->pose.position.z);
     desiered.cRotiation = uav_utils::quad_tf2eig(msg->pose.orientation).toRotationMatrix();
+    desiered.cPositionD.setZero();
+    desiered.cPositionDD.setZero();
+    desiered.yaw = 0;
+    desiered.yawD = 0;
 }
 
-uavModule::uavModule(int time_, Eigen::MatrixXd paraMat) {
+
+uavModule::uavModule(ros::NodeHandle & nh,int time_, Eigen::MatrixXd paraMat) {
+    nh_ = nh;
     /// For visulization
     currentPose_pub = nh_.advertise<geometry_msgs::PoseStamped>("/pose/current", 1);
     desiredPose_pub = nh_.advertise<geometry_msgs::PoseStamped>("/pose/desired", 1);
     thrust_pub = nh_.advertise<std_msgs::Float32>("/pose/thrust",1);
-    pointCloud_pub = nh_.advertise<sensor_msgs::PointCloud2>("/random_complex/global_map",20000);
-
+    pointCloud_pub = nh_.advertise<sensor_msgs::PointCloud2>("/sensing/point_cloud/lidar",20000);
+    odom_pub = nh_.advertise<nav_msgs::Odometry>("/lidar_slam/odom",100);
+    traj_sub = nh_.subscribe("/planning/pos_cmd",1,&uavModule::cmd_traj_callback, this);
     velocity_sub = nh_.subscribe("/mavros/setpoint_velocity/cmd_vel", 1, &uavModule::cmd_velocity_callback, this);
-
+    pose_sub = nh_.subscribe("/mavros/setpoint_position/local",1,&uavModule::cmd_position_callback, this);
     k_bx = paraMat.row(0);
     k_bv = paraMat.row(1);
     k_bi = paraMat.row(2);
@@ -45,6 +63,12 @@ uavModule::uavModule(int time_, Eigen::MatrixXd paraMat) {
         0,   0.002364 , 0,
         -0.0003579, 0, 0.00279965;
     time_step = time_;
+
+    desiered.cPosition = Vec3(0,0,2);
+    desiered.cPositionD = Vec3(0,0,0);
+    desiered.cPositionDD = Vec3(0,0,0);
+    desiered.yaw = 0;
+    desiered.yawD = 0;
 
     /// Get UAV handle
     uav_node = wb_supervisor_node_get_from_def("UAV_LIDAR");
@@ -88,14 +112,17 @@ uavModule::uavModule(int time_, Eigen::MatrixXd paraMat) {
         if (wb_robot_get_time() > 1.0)
             break;
     }
-    ///=======================================================================================================
-    /// Enable Sick
+    /*  Enable Sick */
 
     sick = wb_robot_get_device("sick");
     wb_lidar_enable(sick, time_step);
     wb_lidar_enable_point_cloud(sick);
     resolution = wb_lidar_get_horizontal_resolution(sick);
     layers = wb_lidar_get_number_of_layers(sick);
+
+    /* Init SO3 Controller */
+    controller_.setMass(massQuadrotor);
+    controller_.setGravity(cal.g);
 }
 
 //TODO: I have limit the point cloud range to [0,4] meter. To make sure the color map in rviz looks good
@@ -114,16 +141,17 @@ void uavModule::runSickOnce() {
         int p;
         for (p = 0; p < resolution; ++p) {
             WbLidarPoint point = layer[p];
-            if( -point.y < 4 && -point.y > 0-1e-3);{
+//            if( -point.y < 4 && -point.y > 0-1e-3)
+            {
                 cloud.points[cnt].x = -point.z;
                 cloud.points[cnt].y = point.x;
-                cloud.points[cnt].z = -point.y;
+                cloud.points[cnt].z = -point.y/1.265f;
                 cnt++;
             }
         }
     }
     pcl::toROSMsg(cloud, output);
-    output.header.frame_id = "uav";
+    output.header.frame_id = "laser";
     output.header.stamp = ros::Time::now();
     pointCloud_pub.publish(output);
 }
@@ -142,19 +170,81 @@ void uavModule::updateState(double dt) {
     const double * orientation =  wb_supervisor_node_get_orientation(uav_node);
     const double * positionD = wb_supervisor_node_get_velocity(uav_node);
     const double * angulerD = wb_gyro_get_values(gyro);
+    const double * positionDD = wb_accelerometer_get_values(acc_uav);
+
+
+    controller_.setPosition( Vec3(position[0],position[2],position[1]));
+    controller_.setVelocity(Vec3( positionD[0],positionD[2],positionD[1]));
+    controller_.setAcc(Vec3( positionDD[0],positionDD[2],positionDD[1]));
 
     feedback.cPosition << position[0],position[2],position[1];
-    feedback.pPositionD = feedback.cPositionD;
     feedback.cPositionD << positionD[0],positionD[2],positionD[1];
-    feedback.cPositionDD = cal.getVectorD(feedback.cPositionD, feedback.pPositionD,dt);
-    feedback.cEulerAngleD<< vec2vec3(angulerD);
-    Vec3 eulerAngle(roll,pitch,yaw);
-    feedback.cEulerAngle = eulerAngle;
-    feedback.cRotiation = cal.eulerAngle2rotation(eulerAngle);
+    feedback.cPositionDD =Vec3( positionDD[0],positionDD[2],positionDD[1]);
+    feedback.cEulerAngleD = Vec3(angulerD[0],angulerD[1],angulerD[2]);
+    feedback.cEulerAngle = Vec3(roll,pitch,yaw);
+    feedback.cRotiation = cal.eulerAngle2rotation(feedback.cEulerAngle);
+
+
 }
 
 void uavModule::setDesiredPosition(Vec3 position){
     desiered.cPosition = position;
+}
+
+void uavModule::positionControl(){
+    now = ros::Time::now();
+    const double dt = cal.getDt(ros::Time::now().toSec());
+    desiered.yaw-= desiered.yawD * dt;
+    updateState(dt);
+
+    controller_.calculateControl(desiered.cPosition, desiered.cPositionD, desiered.cPositionDD, desiered.yaw,desiered.yawD,k_bx,k_bv);
+    Vec3 force_ = controller_.getComputedForce();
+    Vec3 b3c;
+    if (force_.norm() > 1e-6)
+        b3c.noalias() = force_.normalized();
+    else
+        b3c.noalias() = Eigen::Vector3d(0, 0, 1);
+
+    Eigen::Matrix3d desiredRotationMatrix = controller_.getComputedOrientation().toRotationMatrix();
+    Vec3 desieredEulerAngle;
+    desieredEulerAngle = desiredRotationMatrix.eulerAngles(0,1,2);
+
+    geometry_msgs::Quaternion desiredQuaterniondBodyTF;
+    geometry_msgs::Quaternion currentQuaterniondBodyTF;
+
+    desiredQuaterniondBodyTF = tf::createQuaternionMsgFromRollPitchYaw(desieredEulerAngle[0],desieredEulerAngle[1],desieredEulerAngle[2]);
+    currentQuaterniondBodyTF = tf::createQuaternionMsgFromRollPitchYaw(feedback.cEulerAngle[0],-feedback.cEulerAngle[1],-feedback.cEulerAngle[2]);
+    visual.desiredPose.pose.orientation = desiredQuaterniondBodyTF;
+    visual.currentPose.pose.orientation = currentQuaterniondBodyTF;
+    visual.desiredPose.pose.position.x = desiered.cPosition.x();visual.desiredPose.pose.position.y = desiered.cPosition.y();visual.desiredPose.pose.position.z = desiered.cPosition.z();
+    visual.currentPose.pose.position.x = feedback.cPosition.x();visual.currentPose.pose.position.y = feedback.cPosition.y();visual.currentPose.pose.position.z = feedback.cPosition.z();
+
+    Vec3 errorRotation =
+            0.5 * cal.antisymmetricMatrixToVector((desiredRotationMatrix.transpose() * feedback.cRotiation -
+                                                   feedback.cRotiation.transpose() * desiredRotationMatrix));
+
+    Vec3 errorAngular = feedback.cEulerAngleD; //- feedback.cRotiation.transpose() * desiredRotationMatrix * desieredEulerAngle;//小角度假设下可忽略： - rotationMatrix_BuW.transpose() * desiredRotationMatrix * desiredAngular;
+
+//    cout<<errorRotation.transpose()<<endl;
+    Vec3 moment =
+            errorRotation.cwiseProduct(k_p) + errorAngular.cwiseProduct(k_d)
+            + feedback.cEulerAngleD.cross(J * feedback.cEulerAngleD);
+
+//            保方向饱和函数
+//    if (moment.norm() > 1)
+//    {
+//        moment = moment.normalized();
+//    }
+    output.force = b3c.transpose() * force_;
+    output.rotorRevs = cal.getAllocatedRevs(output.force, moment);
+    visual.thrust.data = output.force;
+    pubPose();
+    for(int i = 0 ; i < 4 ; i ++ ){
+//        cout<<(output.rotorRevs[i]  * k_f)* pow(-1,(i % 2))<<" ";
+        wb_motor_set_velocity(motors[i], (output.rotorRevs[i]  * k_f)* pow(-1,(i % 2)));
+    }
+//    cout<<endl;
+
 }
 
 void uavModule::stabilized() {
@@ -261,24 +351,34 @@ void uavModule::stabilized() {
 }
 
 void uavModule::pubPose() {
-    const double * position =  wb_supervisor_node_get_position(sick_node);
-    const double * orientation = wb_supervisor_node_get_orientation(sick_node);
-    Mat33 rotation;
-    rotation<< vec2mat(orientation);
-    Eigen::Quaterniond quad_eig = cal.rotation2quatern(rotation);
-    tf::Quaternion quad(quad_eig.x(), quad_eig.y(), quad_eig.z(), quad_eig.w());
+    tf::Quaternion quad_uav;
     tf::Transform trans;
-    tf::Vector3 posi(position[0],-position[2],position[1]);
+
     static tf::TransformBroadcaster broadcaster;
 //    tf::Quaternion quad;
 //    tf::Transform trans;
 //
     trans.setOrigin(tf::Vector3(feedback.cPosition.x(), -feedback.cPosition.y(), feedback.cPosition.z()));
-    quad.setRPY(feedback.cEulerAngle[0],-feedback.cEulerAngle[1],-feedback.cEulerAngle[2]);
-    trans.setRotation(quad);
+    quad_uav.setRPY(feedback.cEulerAngle[0],-feedback.cEulerAngle[1],-feedback.cEulerAngle[2]);
+    trans.setRotation(quad_uav);
     broadcaster.sendTransform(tf::StampedTransform(trans, ros::Time::now(),"world","uav"));
+
+    const double * position =  wb_supervisor_node_get_position(sick_node);
+//    const double * R = wb_supervisor_node_get_orientation(sick_node);
+//    Mat33 rotation;
+//    rotation<<  R[0],R[1],R[2],
+//            R[3],R[4],R[5],
+//            R[6],R[7],R[8];
+//    Mat33 rot90;
+//    rot90 << cos(M_PI / 2), sin(M_PI / 2), 0,
+//            -sin(M_PI / 2), cos(M_PI / 2), 0 ,
+//            0 , 0 , 1;
+//    Eigen::Quaterniond quad_eig = cal.rotation2quatern(rotation * rot90);
+//    tf::Quaternion quad(quad_eig.x(), quad_eig.y(), quad_eig.z(), -quad_eig.w());
+    tf::Vector3 posi(position[0],-position[2],position[1]);
+
     trans.setOrigin(posi);
-    trans.setRotation(quad);
+    trans.setRotation(quad_uav);
     broadcaster.sendTransform(tf::StampedTransform(trans, ros::Time::now(),"world","laser"));
 //    trans.setOrigin(tf::Vector3(0,0,0.08));
 //    trans.setRotation( tf::Quaternion(-0.707107, 0, 0, 0.707107));
@@ -294,6 +394,18 @@ void uavModule::pubPose() {
     currentPose_pub.publish(visual.currentPose);
     desiredPose_pub.publish(visual.desiredPose);
     thrust_pub.publish(visual.thrust);
+
+    nav_msgs::Odometry odom_;
+    odom_.pose.pose = visual.currentPose.pose;
+    odom_.twist.twist.linear.x = feedback.cPositionD.x();
+    odom_.twist.twist.linear.y = -feedback.cPositionD.y();
+    odom_.twist.twist.linear.z = feedback.cPositionD.z();
+    odom_.twist.twist.angular.x = feedback.cEulerAngleD.x();
+    odom_.twist.twist.angular.y = feedback.cEulerAngleD.y();
+    odom_.twist.twist.angular.z = feedback.cEulerAngleD.z();
+    odom_.header.stamp = ros::Time::now();
+    odom_.header.frame_id = "world";
+    odom_pub.publish(odom_);
 
 }
 

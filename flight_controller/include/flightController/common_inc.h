@@ -50,7 +50,7 @@
 #include <tf/transform_broadcaster.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <geometry_msgs/Quaternion.h>
-
+#include <sensor_msgs/PointCloud.h>
 #include <mavros_msgs/AttitudeTarget.h>
 
 ///Eigen

@@ -1,0 +1,18 @@
+#VRML_OBJ R2021a utf8
+Road {
+  translation -43.8 0.01 -9.2
+  rotation 0 1 0 1.1781
+  width 3
+  numberOfLanes 1
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [
+    0 0 0
+    0 0 100
+    200 0 200
+  ]
+  splineSubdivision 8
+  appearance Pavement {
+    type "black stone"
+  }
+}

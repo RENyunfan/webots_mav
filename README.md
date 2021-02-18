@@ -1,4 +1,4 @@
-# flight_controller
+# webots_mav
 
 > Yunfan REN
 >
@@ -8,7 +8,12 @@ This is a ROS package that follows the GPL3 open source protocol, which implemen
 
 # History
 
-* 2020/12/16 First commit
+```diff
++ 2020-12-26: First commit.
++ 2021-02-19: Add velocity control.
+```
+
+<img src="README.assets/image-20210219010914847.png" alt="image-20210219010914847" style="zoom:35%;" />
 
 # Build & Usage
 
@@ -56,9 +61,23 @@ sudo ldconfig
 
 And then run your webots, select the worlds at `./worlds/uav.wbt` and you can see the drone takeoff.
 
-![Screenshot from 2020-12-16 09-21-15](./README.assets/LICENSE)
+![image-20210219010557837](README.assets/image-20210219010557837.png)
 
-You can use topic `/mavros/setpoint_velocity/cmd_vel` to control the velocity of the uav.
+## ROS TOPIC
+
+Now we have two way to control the mav:
+
+### Position control
+
+* Topic name: `/mavros/setpoint_position/local`
+* Topic type: `geometry_msgs::PoseStamped`
+* Attention: The position `z` should not be less than 0.
+
+### Velocity control
+
+* Topic name: `/mavros/setpoint_velocity/cmd_vel`
+* Topic type: `geometry_msgs::TwistStamped`
+* Current maximum velocity has been limited to `3m/s`, I will open a parameter to set it in a moment.
 
 ## Visualization
 
@@ -68,7 +87,7 @@ Use command below to visualize the point cloud.
 roslaunch flight_controller rviz.launch
 ```
 
-![image-20201216093843198](./README.assets/image-20201216093843198.png)
+![image-20210219010510995](README.assets/image-20210219010510995.png)
 
 
 
